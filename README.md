@@ -6,7 +6,7 @@
 都用飞书登录。适合**没有现成企业 IdP**（Entra ID / Okta 等）的组织。
 
 全 Serverless，**无数据库、无常驻服务器**：两个 Lambda + API Gateway、一个 Cognito User Pool、
-一个 KMS 密钥、一个 IAM 角色。是 Keycloak + 飞书 SPI 插件方案的轻量替代。
+一个 KMS 密钥、一个 IAM 角色。
 
 > 📖 完整部署操作步骤见 [`docs/飞书-Quick-统一登录部署手册.md`](docs/飞书-Quick-统一登录部署手册.md)。
 
@@ -39,7 +39,6 @@
 
 SSO 靠的是**共享 IdP 处的浏览器会话**，不是共享 token。登录任一侧后，浏览器留有飞书/Cognito
 会话 cookie；在 Quick Desktop 内点 **More → Chat agents** 等 Web 深链接时复用该会话，无需二次认证。
-**因此无需 SAML、无需 Keycloak** 即可满足深度集成。
 
 ## 前提
 
