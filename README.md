@@ -76,6 +76,7 @@ python3 scripts/verify_deployment.py
 | `-c feishuAppId=cli_xxxx` | *（必填）* | 飞书自建应用 App ID |
 | `-c lark=true` | `false` | 用 Lark（larksuite.com）端点 |
 | `-c subjectClaim=open_id` | `union_id` | OIDC `sub` 用哪个飞书 id |
+| `-c emailClaim=work` | `enterprise` | 邮箱取值：`enterprise`（企业优先）/`work`（工作优先）/`enterprise_only`/`work_only` |
 | `-c quickRegion=us-east-1` | 部署区域 | Quick 所在区域 |
 | `-c allowedCidrs='["1.2.3.0/24"]'` | *（开放）* | 限制两个 API Gateway 的来源 IP |
 | `-c retain=true` | `false` | 删栈时保留 User Pool / KMS 密钥 |

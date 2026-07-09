@@ -12,7 +12,8 @@
 1. [飞书开放平台](https://open.feishu.cn/) → 开发者后台 → **创建企业自建应用**。
 2. **凭证与基础信息** 页记下 **App ID**（`cli_` 开头）和 **App Secret**。
 3. **权限管理** → 开通 `获取用户邮箱信息`（`contact:user.email:readonly`）。
-4. **可用范围** → 设为使用 Quick 的部门/成员。范围内用户须在通讯录里有工作邮箱，且与 Quick 用户邮箱一致。
+4. **可用范围** → 设为使用 Quick 的部门/成员。范围内用户须在通讯录里有邮箱（企业邮箱或工作邮箱皆可，
+   见下方 `emailClaim` 参数），且与 Quick 用户邮箱一致。
 5. **重定向 URL** 先留空（第 3 步回填）。
 6. **创建版本并发布**（权限和可用范围改动必须发布才生效）。
 
@@ -102,7 +103,7 @@ npx cdk deploy -c feishuAppId=cli_xxxxxxxxxxxx     # 用你的 App ID
 
 | 现象 | 处理 |
 |------|------|
-| `feishu user has no email` | 飞书应用未发布邮箱权限，或扫码用户通讯录没填邮箱 |
+| `feishu user has no email` | 飞书应用未发布邮箱权限，或用户在通讯录没填对应邮箱。若用户只有工作邮箱，用 `-c emailClaim=work` 重新部署 |
 | Desktop 报 `invalid_scope` | Auth/Token 端点直连了 Cognito，改用 `/cognito/*` 端点 |
 | 用户不在可用范围 | 飞书后台把可用范围设为使用 Quick 的部门/成员 |
 | 换了飞书应用后 /token 失败 | 新 App Secret 不同，重跑 `set_feishu_secret.py` |
@@ -118,6 +119,7 @@ npx cdk deploy -c feishuAppId=cli_xxxxxxxxxxxx     # 用你的 App ID
 | `-c feishuAppId=cli_xxx` | 飞书 App ID（必填） |
 | `-c lark=true` | 用 Lark（larksuite.com）端点 |
 | `-c subjectClaim=open_id` | OIDC `sub` 用 open_id（默认 union_id） |
+| `-c emailClaim=work` | 邮箱取值策略（默认 `enterprise` 企业邮箱优先）：`enterprise`=企业优先回退工作 / `work`=工作优先回退企业 / `enterprise_only` / `work_only`=只取该字段 |
 | `-c quickRegion=us-east-1` | Quick 所在区域 |
 | `-c allowedCidrs='["1.2.3.0/24"]'` | 限制 API Gateway 来源 IP |
 | `-c retain=true` | 删栈时保留 User Pool / KMS 密钥 |

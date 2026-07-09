@@ -48,6 +48,7 @@ export class FeishuQuickSsoStack extends Stack {
       projectName,
       feishuAppId: config.feishuAppId,
       feishuSubjectClaim: config.feishuSubjectClaim,
+      feishuEmailClaim: config.feishuEmailClaim,
       endpoints: config.endpoints,
       cognitoDomain,
       ...(allowedCidrs && { allowedCidrs }),

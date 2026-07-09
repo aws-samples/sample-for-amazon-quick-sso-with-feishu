@@ -5,6 +5,7 @@ import { FeishuQuickSsoStack } from './stacks/feishu-quick-sso-stack';
 import {
   FEISHU_CN_ENDPOINTS,
   LARK_ENDPOINTS,
+  FeishuEmailClaim,
   FeishuQuickSsoConfig,
   FeishuSubjectClaim,
   ProjectName,
@@ -28,12 +29,16 @@ const useLark = app.node.tryGetContext('lark') === 'true';
 const subjectClaim =
   (app.node.tryGetContext('subjectClaim') as FeishuSubjectClaim | undefined) ||
   FeishuSubjectClaim.UNION_ID;
+const emailClaim =
+  (app.node.tryGetContext('emailClaim') as FeishuEmailClaim | undefined) ||
+  FeishuEmailClaim.ENTERPRISE;
 
 const config: FeishuQuickSsoConfig = {
   projectName: ProjectName.FEISHU_QUICK_SSO,
   retainResources,
   feishuAppId,
   feishuSubjectClaim: subjectClaim,
+  feishuEmailClaim: emailClaim,
   endpoints: useLark ? LARK_ENDPOINTS : FEISHU_CN_ENDPOINTS,
   quickRegion,
   ...(allowedCidrs && { allowedCidrs }),

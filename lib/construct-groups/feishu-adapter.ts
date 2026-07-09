@@ -12,6 +12,7 @@ import {
 import { Construct } from 'constructs';
 import { join } from 'path';
 import {
+  FeishuEmailClaim,
   FeishuEndpoints,
   FeishuSubjectClaim,
   ProjectName,
@@ -27,6 +28,7 @@ export interface FeishuAdapterProps {
   readonly projectName: ProjectName;
   readonly feishuAppId: string;
   readonly feishuSubjectClaim: FeishuSubjectClaim;
+  readonly feishuEmailClaim: FeishuEmailClaim;
   readonly endpoints: FeishuEndpoints;
   /** Cognito hosted-UI domain; the adapter strip-proxies Desktop's OAuth to it. */
   readonly cognitoDomain: string;
@@ -49,8 +51,15 @@ export class FeishuAdapter extends Construct {
   constructor(scope: Construct, id: string, props: FeishuAdapterProps) {
     super(scope, id);
 
-    const { projectName, feishuAppId, feishuSubjectClaim, endpoints, cognitoDomain, allowedCidrs } =
-      props;
+    const {
+      projectName,
+      feishuAppId,
+      feishuSubjectClaim,
+      feishuEmailClaim,
+      endpoints,
+      cognitoDomain,
+      allowedCidrs,
+    } = props;
     const { region } = Stack.of(this);
 
     // Asymmetric key: private half signs id_tokens, public half feeds the JWKS.
@@ -92,6 +101,7 @@ export class FeishuAdapter extends Construct {
         FEISHU_USERINFO_URL: endpoints.userInfo,
         FEISHU_SCOPES: 'contact:user.email:readonly',
         SUBJECT_CLAIM: feishuSubjectClaim,
+        EMAIL_CLAIM: feishuEmailClaim,
         SIGNING_KEY_ID: signingKey.keyArn,
         SECRET_ARN: this.credentialsSecret.secretArn,
         COGNITO_DOMAIN: cognitoDomain,

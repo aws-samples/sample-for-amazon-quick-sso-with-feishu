@@ -73,6 +73,8 @@ FEISHU_TOKEN_URL = os.environ["FEISHU_TOKEN_URL"]
 FEISHU_USERINFO_URL = os.environ["FEISHU_USERINFO_URL"]
 FEISHU_SCOPES = os.environ["FEISHU_SCOPES"]  # space-separated
 SUBJECT_CLAIM = os.environ["SUBJECT_CLAIM"]  # "union_id" | "open_id"
+# enterprise | work | enterprise_only | work_only — which Feishu mailbox → email claim.
+EMAIL_CLAIM = os.environ.get("EMAIL_CLAIM", "enterprise")
 SIGNING_KEY_ID = os.environ["SIGNING_KEY_ID"]  # KMS key id/arn
 SECRET_ARN = os.environ["SECRET_ARN"]  # Secrets Manager secret ARN
 COGNITO_DOMAIN = os.environ["COGNITO_DOMAIN"]  # https://<prefix>.auth.<region>.amazoncognito.com
@@ -262,12 +264,32 @@ def _exchange_code(code: str) -> str:
     return token
 
 
+def _pick_email(user: dict) -> str | None:
+    """Resolve the email claim from Feishu's two mailbox fields per EMAIL_CLAIM.
+
+    `enterprise_email` = 企业邮箱 (admin-assigned); `email` = 工作邮箱 (work email).
+    """
+    enterprise = user.get("enterprise_email")
+    work = user.get("email")
+    match EMAIL_CLAIM:
+        case "enterprise_only":
+            return enterprise
+        case "work_only":
+            return work
+        case "work":
+            return work or enterprise
+        case _:  # "enterprise" (default)
+            return enterprise or work
+
+
 def _fetch_user(user_access_token: str) -> dict:
     body = _http_get_json(FEISHU_USERINFO_URL, user_access_token)
     user = body.get("data") or {}
-    # Feishu may return the address in either field; the adapter accepts both.
-    if not user.get("email") and not user.get("enterprise_email"):
-        raise ValueError("feishu user has no email; grant contact:user.email:readonly")
+    if not _pick_email(user):
+        raise ValueError(
+            f"feishu user has no email for EMAIL_CLAIM={EMAIL_CLAIM}; "
+            "grant contact:user.email:readonly and fill the mailbox in 通讯录"
+        )
     return user
 
 
@@ -359,7 +381,7 @@ def _authenticate_client(event: dict, body: dict) -> bool:
 
 def _claims_for(user: dict, audience: str) -> dict:
     subject = user.get(SUBJECT_CLAIM) or user["open_id"]
-    email = user.get("enterprise_email") or user["email"]
+    email = _pick_email(user)
     now = int(time.time())
     return {
         "iss": ISSUER,

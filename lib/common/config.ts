@@ -46,6 +46,8 @@ export interface FeishuQuickSsoConfig {
   readonly feishuAppId: string;
   /** Which Feishu subject id becomes the OIDC `sub`. See docs for trade-offs. */
   readonly feishuSubjectClaim: FeishuSubjectClaim;
+  /** Which Feishu mailbox field(s) map to the email claim Quick matches users on. */
+  readonly feishuEmailClaim: FeishuEmailClaim;
   readonly endpoints: FeishuEndpoints;
   /** AWS partition/region hosting Amazon Quick, used to build the Web sign-in URL. */
   readonly quickRegion: string;
@@ -57,6 +59,22 @@ export enum FeishuSubjectClaim {
   UNION_ID = 'union_id',
   /** Unique only within this Feishu app. */
   OPEN_ID = 'open_id',
+}
+
+/**
+ * Which Feishu mailbox field maps to the OIDC `email` claim. Feishu returns two:
+ * `enterprise_email` (企业邮箱, admin-assigned) and `email` (工作邮箱, work email).
+ * Quick matches users on this value, so it must equal the Quick user's email.
+ */
+export enum FeishuEmailClaim {
+  /** Prefer 企业邮箱, fall back to 工作邮箱. Default. */
+  ENTERPRISE = 'enterprise',
+  /** Prefer 工作邮箱, fall back to 企业邮箱. */
+  WORK = 'work',
+  /** Use 企业邮箱 only; fail if absent. */
+  ENTERPRISE_ONLY = 'enterprise_only',
+  /** Use 工作邮箱 only; fail if absent. */
+  WORK_ONLY = 'work_only',
 }
 
 export const createResourceName = (
