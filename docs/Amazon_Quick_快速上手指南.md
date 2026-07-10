@@ -18,13 +18,13 @@
 
 选择 Region（推荐 Dynamic），点击 **"Continue with SSO"**：
 
-![选择企业SSO登录](artifacts/login_step1_sso.jpg)
+![选择企业SSO登录](./login_step1_sso.jpg)
 
 ### Step 2：浏览器中输入企业账户名称
 
 首次点击后会跳转到浏览器，输入管理员提供的 **Quick 账户名称**，点击"下一个"：
 
-![输入企业账户名称](artifacts/login_step2_account.jpg)
+![输入企业账户名称](./login_step2_account.jpg)
 
 ### Step 3：完成两次授权
 
