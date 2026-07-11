@@ -95,3 +95,9 @@ python3 scripts/verify_deployment.py
 - **会话时长**：门户经角色链 AssumeRole，会话上限 1 小时；到期后只要飞书浏览器会话在，重新进门户
   会静默续期。
 - **离职回收**：Cognito refresh token 有效期内不回飞书校验，离职时应缩短有效期或禁用 Cognito 用户。
+
+## 许可协议 / License
+
+本示例基于 [MIT-0](https://github.com/aws/mit-0) 协议开源，详见 [`LICENSE`](LICENSE) 文件。
+
+This sample is licensed under the MIT-0 License. See the [`LICENSE`](LICENSE) file.

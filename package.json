@@ -1,5 +1,5 @@
 {
-  "name": "feishu-quick-sso",
+  "name": "sample-for-amazon-quick-sso-with-feishu",
   "version": "1.0.0",
   "description": "CDK stack that bridges Feishu (Lark) self-built app to Amazon Quick Web and Quick Desktop via Cognito OIDC federation and IAM federation",
   "scripts": {
