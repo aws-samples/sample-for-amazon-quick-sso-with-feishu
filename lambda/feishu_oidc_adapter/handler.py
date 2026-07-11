@@ -36,12 +36,12 @@ class Route(StrEnum):
     JWKS = "/.well-known/jwks.json"
     AUTHORIZE = "/authorize"
     CALLBACK = "/callback"
-    TOKEN = "/token"
+    TOKEN = "/token"  # nosec B105 -- URL route path, not a password
     USERINFO = "/userinfo"
     # Cognito strip-proxy for Quick Desktop: Desktop always sends offline_access,
     # which Cognito rejects with invalid_scope. These endpoints strip it and forward.
     COGNITO_AUTHORIZE = "/cognito/authorize"
-    COGNITO_TOKEN = "/cognito/token"
+    COGNITO_TOKEN = "/cognito/token"  # nosec B105 -- URL route path, not a password
 
 
 class HttpMethod(StrEnum):
@@ -206,7 +206,8 @@ def _rsa_public_numbers(der: bytes) -> tuple[int, int]:
         return int.from_bytes(buf[i : i + num_bytes], "big"), i + num_bytes
 
     def expect(buf: bytes, i: int, tag: int) -> tuple[int, int]:
-        assert buf[i] == tag, f"expected tag {tag:#x}, got {buf[i]:#x}"
+        if buf[i] != tag:
+            raise ValueError(f"expected tag {tag:#x}, got {buf[i]:#x}")
         length, i = read_len(buf, i + 1)
         return length, i
 
@@ -228,6 +229,13 @@ def _rsa_public_numbers(der: bytes) -> tuple[int, int]:
 # --- Feishu HTTP calls ----------------------------------------------------------------
 
 
+def _urlopen_https(req: urllib.request.Request):
+    """urlopen restricted to https — blocks file:/ and custom schemes (bandit B310)."""
+    if urllib.parse.urlparse(req.full_url).scheme != "https":
+        raise ValueError(f"refusing non-https URL: {req.full_url}")
+    return urllib.request.urlopen(req)  # nosec B310 # nosemgrep: dynamic-urllib-use-detected -- scheme validated to https above
+
+
 def _http_post_json(url: str, payload: dict) -> dict:
     req = urllib.request.Request(
         url,
@@ -235,7 +243,7 @@ def _http_post_json(url: str, payload: dict) -> dict:
         headers={"Content-Type": f"{ContentType.JSON.value}; charset=utf-8"},
         method=HttpMethod.POST.value,
     )
-    with urllib.request.urlopen(req) as resp:
+    with _urlopen_https(req) as resp:
         return json.loads(resp.read().decode())
 
 
@@ -243,7 +251,7 @@ def _http_get_json(url: str, bearer: str) -> dict:
     req = urllib.request.Request(
         url, headers={"Authorization": f"Bearer {bearer}"}, method=HttpMethod.GET.value
     )
-    with urllib.request.urlopen(req) as resp:
+    with _urlopen_https(req) as resp:
         return json.loads(resp.read().decode())
 
 
@@ -449,13 +457,13 @@ def handle_token(event: dict) -> Response:
     claims = _claims_for(user, Secrets.cognito_client_id())
 
     id_token = Signer.sign_jwt(claims)
-    access_token = Signer.sign_jwt({**claims, "token_use": "access"})
+    access_token = Signer.sign_jwt({**claims, "token_use": "access"})  # nosec B105 -- JWT claim value, not a password
     return _json(
         StatusCode.OK,
         {
             "access_token": access_token,
             "id_token": id_token,
-            "token_type": "Bearer",
+            "token_type": "Bearer",  # nosec B105 -- OAuth 2.0 token type constant, not a password
             "expires_in": ID_TOKEN_TTL_SECONDS,
         },
     )
@@ -522,7 +530,7 @@ def handle_cognito_token(event: dict) -> Response:
     req = urllib.request.Request(
         f"{COGNITO_DOMAIN}/oauth2/token", data=body, headers=headers, method="POST"
     )
-    with urllib.request.urlopen(req) as resp:
+    with _urlopen_https(req) as resp:
         return Response(
             statusCode=resp.status,
             headers={"Content-Type": ContentType.JSON.value},

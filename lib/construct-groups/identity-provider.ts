@@ -1,4 +1,4 @@
-import { RemovalPolicy, Stack } from 'aws-cdk-lib';
+import { Duration, RemovalPolicy, Stack } from 'aws-cdk-lib';
 import {
   UserPool,
   UserPoolClient,
@@ -12,6 +12,7 @@ import { Construct } from 'constructs';
 import {
   ProjectName,
   ResourceName,
+  acknowledgeRule,
   createConstructId,
   createResourceName,
 } from '../common/config';
@@ -65,6 +66,16 @@ export class IdentityProvider extends Construct {
       signInAliases: { username: true, email: true },
       autoVerify: { email: true },
       standardAttributes: { email: { required: true, mutable: true } },
+      // All users federate through Feishu, but a strong policy hardens any local
+      // admin accounts that might be created directly in the pool.
+      passwordPolicy: {
+        minLength: 12,
+        requireLowercase: true,
+        requireUppercase: true,
+        requireDigits: true,
+        requireSymbols: true,
+        tempPasswordValidity: Duration.days(3),
+      },
       removalPolicy,
     });
 
@@ -115,5 +126,19 @@ export class IdentityProvider extends Construct {
 
     this.issuerUrl = `https://cognito-idp.${region}.amazonaws.com/${this.pool.userPoolId}`;
     this.cognitoDomain = `https://${domainPrefix}.auth.${region}.amazoncognito.com`;
+
+    acknowledgeRule(
+      this,
+      'AwsSolutions-COG2',
+      'All users authenticate through the federated Feishu IdP and never hold a ' +
+        'Cognito password; MFA policy belongs to the upstream Feishu tenant.',
+    );
+    acknowledgeRule(
+      this,
+      'AwsSolutions-COG8',
+      'Plus-tier threat protection targets password sign-in risks; this pool is ' +
+        'federation-only (self sign-up disabled, no password flows exposed). Kept on ' +
+        'the default tier to keep the sample cost-neutral.',
+    );
   }
 }

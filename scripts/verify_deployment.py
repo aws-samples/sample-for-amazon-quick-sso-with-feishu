@@ -15,6 +15,7 @@ Usage:
 import argparse
 import json
 import sys
+import urllib.parse
 import urllib.request
 
 import boto3
@@ -29,7 +30,9 @@ def stack_outputs(stack_name: str) -> dict:
 
 
 def get_json(url: str) -> dict:
-    with urllib.request.urlopen(url, timeout=10) as resp:
+    if urllib.parse.urlparse(url).scheme != "https":
+        raise ValueError(f"refusing non-https URL: {url}")
+    with urllib.request.urlopen(url, timeout=10) as resp:  # nosec B310 # nosemgrep: dynamic-urllib-use-detected -- scheme validated to https above
         return json.loads(resp.read().decode())
 
 

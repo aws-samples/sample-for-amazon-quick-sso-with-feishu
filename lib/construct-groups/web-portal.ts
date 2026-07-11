@@ -1,6 +1,12 @@
-import { Duration, Stack } from 'aws-cdk-lib';
+import { Duration, RemovalPolicy, Stack } from 'aws-cdk-lib';
 import { Function as LambdaFunction, Runtime, Code } from 'aws-cdk-lib/aws-lambda';
-import { RestApi, LambdaIntegration } from 'aws-cdk-lib/aws-apigateway';
+import {
+  RestApi,
+  LambdaIntegration,
+  AccessLogFormat,
+  LogGroupLogDestination,
+} from 'aws-cdk-lib/aws-apigateway';
+import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
 import { IUserPool } from 'aws-cdk-lib/aws-cognito';
 import { Role, PolicyStatement, Effect } from 'aws-cdk-lib/aws-iam';
 import {
@@ -13,6 +19,7 @@ import { join } from 'path';
 import {
   ProjectName,
   ResourceName,
+  acknowledgeRule,
   createConstructId,
   createResourceName,
 } from '../common/config';
@@ -47,9 +54,18 @@ export class WebPortal extends Construct {
 
     const policy = allowedCidrs ? this.createResourcePolicy(allowedCidrs) : undefined;
 
+    const accessLogs = new LogGroup(this, createConstructId('ApiAccessLogs'), {
+      retention: RetentionDays.ONE_MONTH,
+      removalPolicy: RemovalPolicy.DESTROY,
+    });
+
     this.api = new RestApi(this, createConstructId('Api'), {
       restApiName: createResourceName(projectName, ResourceName.WEB_PORTAL_API),
-      deployOptions: { stageName: 'prod' },
+      deployOptions: {
+        stageName: 'prod',
+        accessLogDestination: new LogGroupLogDestination(accessLogs),
+        accessLogFormat: AccessLogFormat.jsonWithStandardFields(),
+      },
       ...(policy && { policy }),
     });
 
@@ -58,7 +74,7 @@ export class WebPortal extends Construct {
 
     this.fn = new LambdaFunction(this, createConstructId('Function'), {
       functionName: createResourceName(projectName, ResourceName.WEB_PORTAL_FUNCTION),
-      runtime: Runtime.PYTHON_3_12,
+      runtime: Runtime.PYTHON_3_14,
       handler: 'handler.handler',
       code: Code.fromAsset(join(__dirname, '..', '..', 'lambda', 'web_portal')),
       timeout: Duration.seconds(15),
@@ -89,6 +105,44 @@ export class WebPortal extends Construct {
     // Fold routes into the deployment logical id so route changes repoint the
     // stage (avoids stale-snapshot 403s). See FeishuAdapter for the full rationale.
     this.api.latestDeployment?.addToLogicalId(['login', 'callback']);
+
+    this.acknowledgeNagRules();
+  }
+
+  /** cdk-nag acknowledgements — each documents why the finding is intentional here. */
+  private acknowledgeNagRules(): void {
+    const acknowledge = (id: string, reason: string): void =>
+      acknowledgeRule(this, id, reason);
+
+    acknowledge(
+      'AwsSolutions-COG4',
+      '/login and /callback are the public entry points of the sign-in flow — they run ' +
+        'BEFORE a Cognito session exists, so they cannot require a Cognito authorizer. ' +
+        'Authentication is the OIDC code flow they implement.',
+    );
+    acknowledge(
+      'AwsSolutions-APIG4',
+      'Public sign-in endpoints; authorization is the OIDC authorization-code flow itself.',
+    );
+    acknowledge(
+      'AwsSolutions-APIG2',
+      'Request validation happens in the Lambda handler (missing code -> 400).',
+    );
+    acknowledge(
+      'AwsSolutions-APIG3',
+      'WAF is an optional hardening step for this sample; source IPs can be restricted ' +
+        'with -c allowedCidrs (resource policy), as documented in the README.',
+    );
+    acknowledge(
+      'AwsSolutions-APIG6',
+      'Per-method CloudWatch execution logging would require the account-level API ' +
+        'Gateway CloudWatch role; structured access logging is enabled on the stage instead.',
+    );
+    acknowledge(
+      'AwsSolutions-IAM4[Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole]',
+      'AWSLambdaBasicExecutionRole only grants CloudWatch Logs write access — the ' +
+        'AWS-recommended baseline for Lambda execution roles.',
+    );
   }
 
   public get loginUrl(): string {

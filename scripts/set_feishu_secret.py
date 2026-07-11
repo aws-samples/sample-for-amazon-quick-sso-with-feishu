@@ -18,7 +18,7 @@ import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 
 DEFAULT_STACK = "FeishuQuickSsoMainStack"
-SECRET_OUTPUT_KEY = "AdapterCredentialsSecretArn"
+SECRET_OUTPUT_KEY = "AdapterCredentialsSecretArn"  # nosec B105 -- CloudFormation output key name, not a password
 
 
 def resolve_secret_arn(stack_name: str) -> str:

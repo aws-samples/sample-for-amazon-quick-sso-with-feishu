@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import 'source-map-support/register';
-import { App } from 'aws-cdk-lib';
+import { App, Validations } from 'aws-cdk-lib';
+import { AwsSolutionsChecks } from 'cdk-nag';
 import { FeishuQuickSsoStack } from './stacks/feishu-quick-sso-stack';
 import {
   FEISHU_CN_ENDPOINTS,
@@ -15,6 +16,10 @@ import {
 const region = process.env.CDK_DEFAULT_REGION || 'us-east-1';
 
 const app = new App();
+
+// cdk-nag: fail synth on AWS Solutions rule violations (acknowledged rules are
+// declared inline next to the constructs they concern).
+Validations.of(app).addPlugins(new AwsSolutionsChecks(app, { verbose: true }));
 
 // Required context: -c feishuAppId=cli_xxxx
 const feishuAppId = app.node.tryGetContext('feishuAppId') as string | undefined;

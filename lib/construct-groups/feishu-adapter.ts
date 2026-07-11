@@ -1,6 +1,13 @@
-import { Duration, Stack } from 'aws-cdk-lib';
+import { Duration, RemovalPolicy, Stack } from 'aws-cdk-lib';
 import { Function as LambdaFunction, Runtime, Code } from 'aws-cdk-lib/aws-lambda';
-import { RestApi, LambdaIntegration, Cors } from 'aws-cdk-lib/aws-apigateway';
+import {
+  RestApi,
+  LambdaIntegration,
+  Cors,
+  AccessLogFormat,
+  LogGroupLogDestination,
+} from 'aws-cdk-lib/aws-apigateway';
+import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
 import { Key, KeySpec, KeyUsage } from 'aws-cdk-lib/aws-kms';
 import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
 import {
@@ -17,6 +24,7 @@ import {
   FeishuSubjectClaim,
   ProjectName,
   ResourceName,
+  acknowledgeRule,
   createConstructId,
   createResourceName,
 } from '../common/config';
@@ -90,7 +98,7 @@ export class FeishuAdapter extends Construct {
 
     this.fn = new LambdaFunction(this, createConstructId('Function'), {
       functionName: createResourceName(projectName, ResourceName.FEISHU_ADAPTER_FUNCTION),
-      runtime: Runtime.PYTHON_3_12,
+      runtime: Runtime.PYTHON_3_14,
       handler: 'handler.handler',
       code: Code.fromAsset(join(__dirname, '..', '..', 'lambda', 'feishu_oidc_adapter')),
       timeout: Duration.seconds(15),
@@ -117,9 +125,18 @@ export class FeishuAdapter extends Construct {
 
     const policy = allowedCidrs ? this.createResourcePolicy(allowedCidrs) : undefined;
 
+    const accessLogs = new LogGroup(this, createConstructId('ApiAccessLogs'), {
+      retention: RetentionDays.ONE_MONTH,
+      removalPolicy: RemovalPolicy.DESTROY,
+    });
+
     this.api = new RestApi(this, createConstructId('Api'), {
       restApiName: createResourceName(projectName, ResourceName.FEISHU_ADAPTER_API),
-      deployOptions: { stageName: 'prod' },
+      deployOptions: {
+        stageName: 'prod',
+        accessLogDestination: new LogGroupLogDestination(accessLogs),
+        accessLogFormat: AccessLogFormat.jsonWithStandardFields(),
+      },
       defaultCorsPreflightOptions: { allowOrigins: Cors.ALL_ORIGINS },
       ...(policy && { policy }),
     });
@@ -155,6 +172,52 @@ export class FeishuAdapter extends Construct {
       'cognito/authorize',
       'cognito/token',
     ]);
+
+    this.acknowledgeNagRules();
+  }
+
+  /** cdk-nag acknowledgements — each documents why the finding is intentional here. */
+  private acknowledgeNagRules(): void {
+    const acknowledge = (id: string, reason: string): void =>
+      acknowledgeRule(this, id, reason);
+
+    acknowledge(
+      'AwsSolutions-COG4',
+      'These are public OIDC protocol endpoints (discovery, JWKS, authorize, callback, ' +
+        'token, userinfo). They cannot sit behind a Cognito authorizer because Cognito ' +
+        'itself is the caller; authentication happens inside the OIDC protocol ' +
+        '(client_secret at /token, bearer token at /userinfo).',
+    );
+    acknowledge(
+      'AwsSolutions-APIG4',
+      'Public OIDC endpoints — authorization is enforced by the OIDC protocol itself, ' +
+        'not by an API Gateway authorizer (Cognito federation is the client).',
+    );
+    acknowledge(
+      'AwsSolutions-APIG2',
+      'Request validation happens in the Lambda handler, which returns OIDC-standard ' +
+        'error responses for malformed requests.',
+    );
+    acknowledge(
+      'AwsSolutions-APIG3',
+      'WAF is an optional hardening step for this sample; source IPs can be restricted ' +
+        'with -c allowedCidrs (resource policy), as documented in the README.',
+    );
+    acknowledge(
+      'AwsSolutions-APIG6',
+      'Per-method CloudWatch execution logging would require the account-level API ' +
+        'Gateway CloudWatch role; structured access logging is enabled on the stage instead.',
+    );
+    acknowledge(
+      'AwsSolutions-SMG4',
+      'The secret holds an external Feishu app credential that Secrets Manager cannot ' +
+        'rotate automatically; it must be rotated in the Feishu developer console.',
+    );
+    acknowledge(
+      'AwsSolutions-IAM4[Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole]',
+      'AWSLambdaBasicExecutionRole only grants CloudWatch Logs write access — the ' +
+        'AWS-recommended baseline for Lambda execution roles.',
+    );
   }
 
   /** Desktop Auth endpoint — Cognito authorize via the offline_access strip-proxy. */

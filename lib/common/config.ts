@@ -1,4 +1,5 @@
 import { RemovalPolicy } from 'aws-cdk-lib';
+import { Construct } from 'constructs';
 
 export enum ProjectName {
   FEISHU_QUICK_SSO = 'FeishuQuickSso',
@@ -101,3 +102,15 @@ export const createStackName = (
 
 export const getRemovalPolicy = (retain: boolean): RemovalPolicy =>
   retain ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY;
+
+/**
+ * Acknowledge a cdk-nag rule on a construct subtree.
+ *
+ * Equivalent to `Validations.of(scope).acknowledge(...)`, but writes the metadata
+ * directly: the Validations API rejects granular finding IDs whose bracket segment
+ * contains `::` (e.g. `AwsSolutions-IAM4[Policy::arn:...]`), while cdk-nag matches
+ * on the raw metadata key, so this works for every ID form.
+ */
+export const acknowledgeRule = (scope: Construct, id: string, reason: string): void => {
+  scope.node.addMetadata('aws:cdk:acknowledged-rules', { [id]: reason });
+};

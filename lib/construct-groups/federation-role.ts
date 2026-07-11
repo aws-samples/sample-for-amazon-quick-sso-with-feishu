@@ -11,6 +11,7 @@ import { Construct } from 'constructs';
 import {
   ProjectName,
   ResourceName,
+  acknowledgeRule,
   createConstructId,
   createResourceName,
 } from '../common/config';
@@ -58,6 +59,21 @@ export class FederationRole extends Construct {
         }),
       },
     });
+
+    acknowledgeRule(
+      this,
+      'AwsSolutions-IAM5[Action::quicksight:*]',
+      'Sample default so federated users land in a fully working Amazon Quick. The ' +
+        'README explicitly instructs operators to narrow this to least privilege; the ' +
+        'trust policy is already restricted to the portal Lambda role only.',
+    );
+    acknowledgeRule(
+      this,
+      'AwsSolutions-IAM5[Resource::*]',
+      'QuickSight console access actions do not support resource-level scoping for ' +
+        'the sign-in path; access is bounded by the quicksight service prefix and the ' +
+        'Email session tag that Quick keys users on.',
+    );
   }
 
   /**

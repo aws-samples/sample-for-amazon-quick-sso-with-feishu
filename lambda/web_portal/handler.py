@@ -110,6 +110,14 @@ def _error(status: int, message: str) -> Response:
 # --- OIDC code flow against Cognito ---------------------------------------------------
 
 
+def _urlopen_https(target: urllib.request.Request | str):
+    """urlopen restricted to https — blocks file:/ and custom schemes (bandit B310)."""
+    url = target if isinstance(target, str) else target.full_url
+    if urllib.parse.urlparse(url).scheme != "https":
+        raise ValueError(f"refusing non-https URL: {url}")
+    return urllib.request.urlopen(target)  # nosec B310 # nosemgrep: dynamic-urllib-use-detected -- scheme validated to https above
+
+
 def handle_login() -> Response:
     params = {
         "response_type": "code",
@@ -142,7 +150,7 @@ def _exchange_code_for_id_token(code: str) -> dict:
         },
         method="POST",
     )
-    with urllib.request.urlopen(req) as resp:
+    with _urlopen_https(req) as resp:
         tokens = json.loads(resp.read().decode())
     return _decode_jwt_payload(tokens["id_token"])
 
@@ -175,7 +183,7 @@ def _get_signin_token(creds: dict) -> str:
         }
     )
     params = urllib.parse.urlencode({"Action": "getSigninToken", "Session": session})
-    with urllib.request.urlopen(f"{SIGNIN_FEDERATION_URL}?{params}") as resp:
+    with _urlopen_https(f"{SIGNIN_FEDERATION_URL}?{params}") as resp:
         return json.loads(resp.read().decode())["SigninToken"]
 
 
