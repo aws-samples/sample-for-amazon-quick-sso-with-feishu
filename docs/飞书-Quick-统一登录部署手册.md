@@ -52,6 +52,9 @@ npx cdk deploy -c feishuAppId=cli_xxxxxxxxxxxx     # 用你的 App ID
    ```bash
    python3 scripts/set_feishu_secret.py --app-secret <FEISHU_APP_SECRET>
    ```
+   > `scripts/` 下的脚本通过 boto3 读取默认区域（`aws configure` 的 `region`，或环境变量
+   > `AWS_REGION` / `AWS_DEFAULT_REGION`）来定位 CloudFormation 栈。未配置会报
+   > `NoRegionError`，先执行 `export AWS_DEFAULT_REGION=<部署区域>`。
 3. 冒烟测试，全部 `PASS` 再继续：
    ```bash
    python3 scripts/verify_deployment.py
