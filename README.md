@@ -102,6 +102,8 @@ python3 scripts/verify_deployment.py
   会静默续期。
 - **离职回收**：Cognito refresh token 有效期内不回飞书校验，离职时应缩短有效期或禁用 Cognito 用户。
 
+> ⚠️ **离职回收（务必关注的运维事项）**：本方案在 Cognito refresh token 有效期内**不会回飞书重新校验用户状态**。员工从飞书离职、被冻结或权限被收回后，只要其 Cognito refresh token 仍在有效期内，就仍可能继续登录 Amazon Quick。请在上线前落实离职处置流程：**缩短 Cognito refresh token 有效期**（默认较长，建议按组织安全基线收敛），并在员工离职时**主动禁用或删除对应的 Cognito 用户**（可结合 `AdminUserGlobalSignOut` 立即吊销其所有已签发令牌）。切勿仅依赖"飞书侧禁用账号"来完成访问回收。
+
 ## 许可协议 / License
 
 本示例基于 [MIT-0](https://github.com/aws/mit-0) 协议开源，详见 [`LICENSE`](LICENSE) 文件。
