@@ -94,7 +94,14 @@ npx cdk deploy -c feishuAppId=cli_xxxxxxxxxxxx     # 用你的 App ID
    IdP URL:  <WebPortalLoginUrl>
    ```
    （必须开：否则 Quick Desktop 发起的登录会落到 Quick Web 原生登录页，无法跳飞书。）
-3. 联邦角色 `FederationRoleArn` 默认授予 `quicksight:*`，按需收敛。
+3. 联邦角色 `FederationRoleArn` 与部署参数 `-c quickUserRole` 共同决定**首次登录**用户的角色：
+   - `reader_pro`/`author_pro`/`admin_pro`（默认 `reader_pro`）：专业版无自助预置 IAM action，
+     门户 Lambda 会在联邦跳转前自动调 `RegisterUser` 预注册为对应专业版角色；注册异常时回退为
+     基础角色自助预置。
+   - `reader`/`author`/`admin`（`admin` 授予 `quicksight:*`，生产慎用）：IAM 自助预置为
+     读者/作者/管理员。
+
+   已有用户角色不受影响，且管理员不能降级为读者（需在「管理用户」里删除后让其重新登录预置）。
 
 ---
 

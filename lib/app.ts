@@ -10,6 +10,7 @@ import {
   FeishuQuickSsoConfig,
   FeishuSubjectClaim,
   ProjectName,
+  QuickUserRole,
   createStackName,
 } from './common/config';
 
@@ -37,6 +38,15 @@ const subjectClaim =
 const emailClaim =
   (app.node.tryGetContext('emailClaim') as FeishuEmailClaim | undefined) ||
   FeishuEmailClaim.ENTERPRISE;
+const quickUserRole =
+  (app.node.tryGetContext('quickUserRole') as QuickUserRole | undefined) ||
+  QuickUserRole.READER_PRO;
+if (!Object.values(QuickUserRole).includes(quickUserRole)) {
+  throw new Error(
+    `Invalid context quickUserRole=${quickUserRole}. ` +
+      `Valid values: ${Object.values(QuickUserRole).join(', ')}`,
+  );
+}
 
 const config: FeishuQuickSsoConfig = {
   projectName: ProjectName.FEISHU_QUICK_SSO,
@@ -46,6 +56,7 @@ const config: FeishuQuickSsoConfig = {
   feishuEmailClaim: emailClaim,
   endpoints: useLark ? LARK_ENDPOINTS : FEISHU_CN_ENDPOINTS,
   quickRegion,
+  quickUserRole,
   ...(allowedCidrs && { allowedCidrs }),
 };
 

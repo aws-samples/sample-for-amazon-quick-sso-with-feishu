@@ -52,8 +52,51 @@ export interface FeishuQuickSsoConfig {
   readonly endpoints: FeishuEndpoints;
   /** AWS partition/region hosting Amazon Quick, used to build the Web sign-in URL. */
   readonly quickRegion: string;
+  /** Quick role that first-time users self-provision as. See QuickUserRole. */
+  readonly quickUserRole: QuickUserRole;
   readonly allowedCidrs?: string[];
 }
+
+/**
+ * Quick role a first-time federated user lands as. Two provisioning mechanisms:
+ *
+ * Base roles (reader/author/admin) use IAM self-provisioning — Quick decides the
+ * role from which `quicksight:Create*` action the federation role's policy allows
+ * (CreateReader -> Reader, CreateUser -> Author, CreateAdmin / `quicksight:*` -> Admin).
+ *
+ * Pro roles (reader_pro/author_pro/admin_pro) have NO self-provision IAM action
+ * (verified against the quicksight service reference), so the Web portal Lambda
+ * pre-registers the user via the RegisterUser API (which does support *_PRO)
+ * right before the federation sign-in. The federation role keeps the base-role
+ * Create* action as a fallback if registration ever fails.
+ *
+ * Only affects users signing in for the first time; existing Quick users keep their
+ * current role (and Admins cannot be downgraded — delete and re-provision instead).
+ */
+export enum QuickUserRole {
+  /** Self-provision as 读者 via quicksight:CreateReader. */
+  READER = 'reader',
+  /** Self-provision as 作者 via quicksight:CreateUser. */
+  AUTHOR = 'author',
+  /** Self-provision as 管理员; grants quicksight:*. */
+  ADMIN = 'admin',
+  /** 专业版读者 — portal pre-registers via RegisterUser(READER_PRO). Default. */
+  READER_PRO = 'reader_pro',
+  /** 专业版作者 — portal pre-registers via RegisterUser(AUTHOR_PRO). */
+  AUTHOR_PRO = 'author_pro',
+  /** 专业版管理员 — portal pre-registers via RegisterUser(ADMIN_PRO). */
+  ADMIN_PRO = 'admin_pro',
+}
+
+/** Pro roles are provisioned by the portal via RegisterUser, not IAM self-provision. */
+export const isProRole = (role: QuickUserRole): boolean => role.endsWith('_pro');
+
+/** The base role whose Create* action backs `role` (pro roles fall back to base). */
+export const toBaseRole = (role: QuickUserRole): QuickUserRole =>
+  role.replace('_pro', '') as QuickUserRole;
+
+/** The Quick RegisterUser/UpdateUser API enum value, e.g. reader_pro -> READER_PRO. */
+export const toQuickApiRole = (role: QuickUserRole): string => role.toUpperCase();
 
 export enum FeishuSubjectClaim {
   /** Stable across all apps in the tenant. Recommended so identity survives app changes. */

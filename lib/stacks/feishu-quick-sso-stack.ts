@@ -57,6 +57,7 @@ export class FeishuQuickSsoStack extends Stack {
     // 2. Federation role (trust narrowed to the portal Lambda below).
     const federation = new FederationRole(this, createConstructId('Federation'), {
       projectName,
+      quickUserRole: config.quickUserRole,
     });
 
     // 3. Web sign-in portal. Built before the Cognito clients so its callback URL
@@ -66,6 +67,7 @@ export class FeishuQuickSsoStack extends Stack {
       cognitoDomain,
       federationRole: federation.role,
       quickRegion,
+      quickUserRole: config.quickUserRole,
       ...(allowedCidrs && { allowedCidrs }),
     });
     federation.trustPortal(portal.lambdaRoleArn);

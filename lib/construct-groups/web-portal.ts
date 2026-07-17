@@ -18,10 +18,13 @@ import { Construct } from 'constructs';
 import { join } from 'path';
 import {
   ProjectName,
+  QuickUserRole,
   ResourceName,
   acknowledgeRule,
   createConstructId,
   createResourceName,
+  isProRole,
+  toQuickApiRole,
 } from '../common/config';
 
 export interface WebPortalProps {
@@ -30,6 +33,8 @@ export interface WebPortalProps {
   readonly cognitoDomain: string;
   readonly federationRole: Role;
   readonly quickRegion: string;
+  /** First-login role. Pro roles make the portal pre-register users via RegisterUser. */
+  readonly quickUserRole: QuickUserRole;
   readonly allowedCidrs?: string[];
 }
 
@@ -49,8 +54,9 @@ export class WebPortal extends Construct {
   constructor(scope: Construct, id: string, props: WebPortalProps) {
     super(scope, id);
 
-    const { projectName, cognitoDomain, federationRole, quickRegion, allowedCidrs } = props;
-    const { region } = Stack.of(this);
+    const { projectName, cognitoDomain, federationRole, quickRegion, quickUserRole, allowedCidrs } =
+      props;
+    const { account, partition, region } = Stack.of(this);
 
     const policy = allowedCidrs ? this.createResourcePolicy(allowedCidrs) : undefined;
 
@@ -97,6 +103,32 @@ export class WebPortal extends Construct {
         resources: [federationRole.roleArn],
       }),
     );
+
+    // Pro roles have no IAM self-provision action, so the portal pre-registers
+    // first-time users via the RegisterUser API (which supports *_PRO) right
+    // before the federation sign-in. Scoped to registrations that bind exactly
+    // our federation role via the quicksight:IamArn condition key.
+    if (isProRole(quickUserRole)) {
+      this.fn.addEnvironment('QUICK_NEW_USER_ROLE', toQuickApiRole(quickUserRole));
+      this.fn.addEnvironment('QUICK_ACCOUNT_ID', account);
+      this.fn.addToRolePolicy(
+        new PolicyStatement({
+          effect: Effect.ALLOW,
+          actions: ['quicksight:RegisterUser'],
+          resources: [`arn:${partition}:quicksight:*:${account}:user/*`],
+          conditions: {
+            StringEquals: { 'quicksight:IamArn': federationRole.roleArn },
+          },
+        }),
+      );
+      acknowledgeRule(
+        this,
+        `AwsSolutions-IAM5[Resource::arn:${partition}:quicksight:*:${account}:user/*]`,
+        'RegisterUser creates user records whose names are derived from user emails, ' +
+          'unknowable at deploy time; the grant is bounded to this account and to ' +
+          'registrations binding exactly the federation role via quicksight:IamArn.',
+      );
+    }
 
     const integration = new LambdaIntegration(this.fn);
     this.api.root.addResource('login').addMethod('GET', integration);

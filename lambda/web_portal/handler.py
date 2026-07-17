@@ -62,6 +62,10 @@ QUICK_REGION = os.environ["QUICK_REGION"]
 # regardless of the target role's MaxSessionDuration. Quick re-federates silently
 # after expiry as long as the Cognito/Feishu browser session is alive.
 SESSION_DURATION_SECONDS = int(os.environ.get("SESSION_DURATION_SECONDS", "3600"))
+# Set (e.g. to READER_PRO) when the deployment targets a Pro role: those have no IAM
+# self-provision action, so we pre-register first-time users before federating.
+QUICK_NEW_USER_ROLE = os.environ.get("QUICK_NEW_USER_ROLE")
+QUICK_ACCOUNT_ID = os.environ.get("QUICK_ACCOUNT_ID")
 
 QUICK_CONSOLE_URL = f"https://{QUICK_REGION}.quicksight.aws.amazon.com"
 SIGNIN_FEDERATION_URL = "https://signin.aws.amazon.com/federation"
@@ -164,6 +168,35 @@ def _decode_jwt_payload(jwt: str) -> dict:
 # --- IAM federation -> Quick Web ------------------------------------------------------
 
 
+def _ensure_user_registered(email: str) -> None:
+    """Pre-register a Pro-role user record before the federation sign-in.
+
+    Quick keys IAM-federated users on `<role-name>/<session-name>`; RegisterUser with
+    the same IamArn + SessionName creates exactly the record the sign-in will match,
+    so first-time users land directly as QUICK_NEW_USER_ROLE (e.g. READER_PRO) instead
+    of self-provisioning. Existing users raise ResourceExistsException — expected, and
+    their current role is left untouched. Any other failure is logged but does not
+    block sign-in: the federation role's base Create* policy self-provisions the user
+    as the non-Pro base role instead (an admin can upgrade them later).
+    """
+    quicksight = boto3.client("quicksight", region_name=QUICK_REGION)
+    try:
+        quicksight.register_user(
+            AwsAccountId=QUICK_ACCOUNT_ID,
+            Namespace="default",
+            IdentityType="IAM",
+            IamArn=FEDERATION_ROLE_ARN,
+            SessionName=email,
+            Email=email,
+            UserRole=QUICK_NEW_USER_ROLE,
+        )
+        print(f"REGISTERED: {email} as {QUICK_NEW_USER_ROLE}")
+    except quicksight.exceptions.ResourceExistsException:
+        pass  # Already registered (any role) — never touch existing users.
+    except Exception as e:  # noqa: BLE001
+        print(f"REGISTER_USER FAILED (falling back to self-provision): {type(e).__name__}: {e}")
+
+
 def _assume_role_for(email: str) -> dict:
     resp = sts.assume_role(
         RoleArn=FEDERATION_ROLE_ARN,
@@ -209,6 +242,9 @@ def handle_callback(event: dict) -> Response:
     email = claims.get("email")
     if not email:
         return _error(StatusCode.FORBIDDEN, "No email claim in token.")
+
+    if QUICK_NEW_USER_ROLE:
+        _ensure_user_registered(email)
 
     creds = _assume_role_for(email)
     signin_token = _get_signin_token(creds)

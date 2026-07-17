@@ -86,6 +86,7 @@ python3 scripts/verify_deployment.py
 | `-c subjectClaim=open_id` | `union_id` | OIDC `sub` 用哪个飞书 id |
 | `-c emailClaim=work` | `enterprise` | 邮箱取值：`enterprise`（企业优先）/`work`（工作优先）/`enterprise_only`/`work_only` |
 | `-c quickRegion=us-east-1` | 部署区域 | Quick 所在区域 |
+| `-c quickUserRole=admin` | `reader_pro` | 首次登录用户的 Quick 角色：`reader`/`author`/`admin`（IAM 自助预置；`admin` 授予 `quicksight:*`）或 `reader_pro`/`author_pro`/`admin_pro`（门户登录时自动 `RegisterUser` 预注册为专业版） |
 | `-c allowedCidrs='["1.2.3.0/24"]'` | *（开放）* | 限制两个 API Gateway 的来源 IP |
 | `-c retain=true` | `false` | 删栈时保留 User Pool / KMS 密钥 |
 
@@ -94,8 +95,14 @@ python3 scripts/verify_deployment.py
 - **KMS 签名密钥**：适配器用非对称 KMS 密钥签 `id_token`，私钥不出 KMS。删栈会计划删除该密钥，
   除非 `-c retain=true`。
 - **API Gateway 默认公开**：用 `-c allowedCidrs` 加资源策略限制来源 IP，或给 `prod` stage 挂 AWS WAF。
-- **联邦角色权限**：Quick 联邦角色默认授予 `quicksight:*`，建议按最小权限收敛（信任策略已限定为门户
-  Lambda 角色）。
+- **联邦角色权限 / 新用户默认角色**：`-c quickUserRole` 决定首次登录用户的 Quick 角色，默认
+  `reader_pro`（专业版读者）。基础角色（`reader`/`author`/`admin`）走 IAM 自助预置——按联邦角色
+  策略里的 `quicksight:Create*` 权限决定；`admin` 授予 `quicksight:*`，新用户落地为**管理员**，
+  生产环境慎用。**专业版角色没有自助预置 IAM action**（已对照 quicksight 服务权限清单核实），
+  选 `reader_pro`/`author_pro`/`admin_pro` 时由 Web 门户 Lambda 在联邦跳转前自动调 `RegisterUser`
+  预注册（权限经 `quicksight:IamArn` 条件键限定为只能绑定本联邦角色）；注册异常时回退为对应基础
+  角色自助预置。注意：只影响**首次登录**的新用户，已有用户角色不变，且管理员不能降级为读者
+  （需删除后重新预置）。
 - **`sub` 选择不可逆**：默认 `union_id`（换飞书应用后身份稳定）；`open_id` 仅应用内唯一，改动会重新
   预置所有用户。
 - **会话时长**：门户经角色链 AssumeRole，会话上限 1 小时；到期后只要飞书浏览器会话在，重新进门户

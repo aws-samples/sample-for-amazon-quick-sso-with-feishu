@@ -10,14 +10,18 @@ import {
 import { Construct } from 'constructs';
 import {
   ProjectName,
+  QuickUserRole,
   ResourceName,
   acknowledgeRule,
   createConstructId,
   createResourceName,
+  toBaseRole,
 } from '../common/config';
 
 export interface FederationRoleProps {
   readonly projectName: ProjectName;
+  /** Quick role first-time users self-provision as; drives the quicksight policy. */
+  readonly quickUserRole: QuickUserRole;
 }
 
 /**
@@ -25,8 +29,10 @@ export interface FederationRoleProps {
  * the only principal allowed to assume it, and it may pass an `Email` principal
  * tag (sts:TagSession) — Quick keys the federated user on that tag.
  *
- * The role's permissions policy grants the QuickSight/Quick console reader action
- * so the federation sign-in lands the user in Quick.
+ * Quick self-provisions first-time users based on which quicksight:Create* action
+ * this role's policy allows (see QuickUserRole). `reader`/`author` grant only that
+ * single action scoped to the caller's own user record; `admin` grants quicksight:*
+ * so the sample works fully out of the box.
  */
 export class FederationRole extends Construct {
   public readonly role: Role;
@@ -34,8 +40,32 @@ export class FederationRole extends Construct {
   constructor(scope: Construct, id: string, props: FederationRoleProps) {
     super(scope, id);
 
-    const { projectName } = props;
-    const { account } = Stack.of(this);
+    const { projectName, quickUserRole } = props;
+    const { account, partition } = Stack.of(this);
+
+    // Self-provision resource per the AWS federation examples: the user record the
+    // caller creates for themselves. `${aws:userid}` is an IAM policy variable
+    // resolved at evaluation time (quicksight user ARNs carry no region).
+    // Pro roles are provisioned by the portal via RegisterUser before sign-in; the
+    // base Create* action here is only a fallback if that registration ever fails.
+    const selfUserArn = `arn:${partition}:quicksight::${account}:user/\${aws:userid}`;
+    const policyByBaseRole: Record<string, PolicyStatement> = {
+      [QuickUserRole.READER]: new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: ['quicksight:CreateReader'],
+        resources: [selfUserArn],
+      }),
+      [QuickUserRole.AUTHOR]: new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: ['quicksight:CreateUser'],
+        resources: [selfUserArn],
+      }),
+      [QuickUserRole.ADMIN]: new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: ['quicksight:*'],
+        resources: ['*'],
+      }),
+    };
 
     this.role = new Role(this, createConstructId('Role'), {
       roleName: createResourceName(projectName, ResourceName.FEDERATION_ROLE),
@@ -49,31 +79,27 @@ export class FederationRole extends Construct {
       maxSessionDuration: Duration.hours(1),
       inlinePolicies: {
         QuickAccess: new PolicyDocument({
-          statements: [
-            new PolicyStatement({
-              effect: Effect.ALLOW,
-              actions: ['quicksight:*'],
-              resources: ['*'],
-            }),
-          ],
+          statements: [policyByBaseRole[toBaseRole(quickUserRole)]],
         }),
       },
     });
 
-    acknowledgeRule(
-      this,
-      'AwsSolutions-IAM5[Action::quicksight:*]',
-      'Sample default so federated users land in a fully working Amazon Quick. The ' +
-        'README explicitly instructs operators to narrow this to least privilege; the ' +
-        'trust policy is already restricted to the portal Lambda role only.',
-    );
-    acknowledgeRule(
-      this,
-      'AwsSolutions-IAM5[Resource::*]',
-      'QuickSight console access actions do not support resource-level scoping for ' +
-        'the sign-in path; access is bounded by the quicksight service prefix and the ' +
-        'Email session tag that Quick keys users on.',
-    );
+    if (toBaseRole(quickUserRole) === QuickUserRole.ADMIN) {
+      acknowledgeRule(
+        this,
+        'AwsSolutions-IAM5[Action::quicksight:*]',
+        'quicksight:* is granted only when the operator explicitly selects ' +
+          '-c quickUserRole=admin, so federated admins land in a fully working Quick; ' +
+          'the trust policy is already restricted to the portal Lambda role only.',
+      );
+      acknowledgeRule(
+        this,
+        'AwsSolutions-IAM5[Resource::*]',
+        'QuickSight console access actions do not support resource-level scoping for ' +
+          'the sign-in path; access is bounded by the quicksight service prefix and the ' +
+          'Email session tag that Quick keys users on.',
+      );
+    }
   }
 
   /**
